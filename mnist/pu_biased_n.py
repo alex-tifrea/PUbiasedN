@@ -189,7 +189,6 @@ params = OrderedDict([
 #         x = self.fc2(x)
 #         return x
 
-# TODO: adjust this to our arch.
 class Net(nn.Module):
 
     def __init__(self, num_classes=1):

@@ -5,6 +5,7 @@ import yaml
 
 import numpy as np
 
+import mlflow
 import torch
 import torch.utils.data
 import tensorflow as tf
@@ -37,6 +38,17 @@ parser.add_argument('--ppe-load-path', type=str, default=None)
 parser.add_argument("--id_dataset", required=True)
 parser.add_argument("--ood_dataset", required=True)
 parser.add_argument("--experiment_name", required=True)
+parser.add_argument(
+    "-wp",
+    "--with_param",
+    type=str,
+    action="append",
+    default=[],
+    help="Optional repeated argument of the form k=[v], "
+         "will be included in the cartesian product of parameters, "
+         "using k as the gin parameter name. "
+         "Example usage: --with_param data.batch_size=[32,64,128]",
+)
 
 
 args = parser.parse_args()
@@ -61,13 +73,20 @@ else:
 # test_labels = prepare_data.test_labels
 
 
-
 # XXX: parse parameters (from param file and from the file loaded for the dataset).
 if args.params_path is not None:
     with open(args.params_path) as f:
         params_file = yaml.load(f)
     for key in params_file:
         params[key] = params_file[key]
+
+
+# Parse params passed as command line arguments.
+for param_string in args.with_param:
+    [k, v] = param_string.split("=")
+    v = eval(v)  # Risky but what you gonna do about it.
+    params[k] = v
+    params[f"\n{k}"] = v
 
 
 if args.random_seed is not None:
@@ -282,6 +301,7 @@ test_labels = torch.Tensor(test_set_np[1])
 mlflow_params = {
     "id_dataset": args.id_dataset,
     "ood_dataset": args.ood_dataset,
+    "method": "nnPU",
     "p_set_size": p_set.shape[0],
     "u_set_size": u_set.shape[0],
     "p_validation_size": p_validation.shape[0],
@@ -290,6 +310,9 @@ mlflow_params = {
     "batch_size": total_batch_size,
     "pi": pi,
     "epochs": cls_training_epochs,
+    "start_lr": learning_rate_cls,
+    "nnpu_threshold": nn_threshold,
+    "nnpu_stepsize": nn_rate,
 }
 
 print("MLFLOW params", mlflow_params)
@@ -359,6 +382,14 @@ torch.backends.cudnn.deterministic = True
 
 # This does nnPU.
 if pu:
+    lib_data.setup_mlflow()
+    mlflow.set_experiment(args.experiment_name)
+
+    run = lib_data.retry(lambda: mlflow.start_run(run_name=f"{args.id_dataset}_vs_{args.ood_dataset}"))
+    run_id = run.info.run_id
+    mlflow_params["run_id"] = run_id
+    lib_data.retry(lambda: mlflow.log_params(mlflow_params))
+
     print('')
     model = Net().cuda() if args.cuda else Net()
     cls = training.PUClassifier(
@@ -369,6 +400,9 @@ if pu:
     cls.train(p_set, u_set, test_set, p_batch_size, u_batch_size,
               p_validation, u_validation,
               cls_training_epochs, convex_epochs=convex_epochs)
+
+    # retry(lambda: mlflow.log_metrics(best_result))
+    lib_data.retry(lambda: mlflow.end_run())
 
 
 # n_embedding_points = 500

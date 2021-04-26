@@ -11,11 +11,22 @@ from .lib_image import normalize_image
 from . import lib_celeb_a
 from . import lib_waterbirds
 
+import requests
+import time
 import sys
 
 sys.path.append(str(Path(__file__).parent.parent))
 
 # from medical_ood import lib_medical_ood
+
+def retry(f):
+    while True:
+        try:
+            return f()
+        except requests.exceptions.ProxyError:
+            print("Retrying MLFlow...")
+            time.sleep(3)
+            continue
 
 
 def disable_tf_memory_hog():

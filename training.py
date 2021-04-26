@@ -10,6 +10,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 import settings
+from reproduction import lib_data
+import mlflow
 
 
 class Training(object):
@@ -71,7 +73,7 @@ class Training(object):
         return torch.cat(fxs)[:x.size(0)]
 
     def compute_classification_metrics(
-            self, labels, pred, output=None, to_print=True):
+            self, labels, pred, output=None, to_print=True, epoch=None, is_final_model=False):
         target = labels.numpy().reshape(-1).copy()
         target[target == -1] = 0
         pred = pred.cpu().numpy().reshape(-1)
@@ -89,6 +91,15 @@ class Training(object):
             sklearn.metrics.precision_recall_fscore_support(target, pred)
         n_negative = np.sum(target == 0)
         n_false_positive = np.sum(np.logical_and(pred == 1, target == 0))
+
+        prefix = "best_" if is_final_model else ""
+        lib_data.retry(lambda: mlflow.log_metrics({
+            f"{prefix}test_acc": accuracy,
+            f"{prefix}test_p_acc": np.sum(np.logical_and(pred == 1, target == 1)) / np.sum(target == 1),
+            f"{prefix}test_n_acc": np.sum(np.logical_and(pred == 0, target == 0)) / np.sum(target == 0),
+            f"{prefix}auroc": auc_score,
+        }, step=epoch))
+
         if to_print:
             print('Test set: Accuracy: {:.2f}%'
                   .format(accuracy*100), flush=True)
@@ -130,12 +141,12 @@ class Training(object):
 
 class Classifier(Training):
 
-    def test(self, test_set, to_print=True):
+    def test(self, test_set, to_print=True, epoch=None, is_final_model=False):
         x = test_set.tensors[0]
         labels = test_set.tensors[1]
         output = self.feed_in_batches(self.model, x, settings.test_batch_size)
         pred = torch.sign(output)
-        self.compute_classification_metrics(labels, pred, output, to_print)
+        self.compute_classification_metrics(labels, pred, output, to_print, epoch, is_final_model)
 
     def basic_loss(self, fx, convex):
         if convex:
@@ -183,18 +194,34 @@ class ClassifierFrom2(Classifier):
                 p_loader, n_loader,
                 p_validation, n_validation, convex)
 
+            validation_loss = self.validation(p_validation, n_validation, convex)
             if (epoch+1) % test_interval == 0 or epoch+1 == num_epochs:
+
+                p_output = self.feed_in_batches(self.model, p_set.tensors[0], settings.test_batch_size)
+                n_output = self.feed_in_batches(self.model, n_set.tensors[0], settings.test_batch_size)
+                p_pred = torch.sign(p_output)
+                n_pred = torch.sign(n_output)
+                train_acc = (p_pred[p_pred > 0].shape[0] + n_pred[n_pred < 0].shape[0]) / (p_pred.shape[0] + n_pred.shape[0])
+
+                lib_data.retry(lambda: mlflow.log_metrics({
+                    "lr": self.scheduler.get_lr(),
+                    "val_loss": validation_loss.item(),
+                    "train_loss": average_loss,
+                    "train_acc": train_acc,
+                    "train_p_acc": p_pred[p_pred > 0].shape[0] / p_pred.shape[0],
+                    "train_u_acc": n_pred[n_pred > 0].shape[0] / n_pred.shape[0],
+                }, step=epoch))
 
                 to_print = (epoch+1) % print_interval == 0
                 if to_print:
                     sys.stdout.write('Epoch: {}  '.format(epoch))
-                    print('Train Loss: {:.6f}'.format(average_loss))
-                self.test(test_set, to_print)
+                    print('Train Loss: {:.6f}; Train Acc: {:.6f}'.format(average_loss, train_acc))
+                self.test(test_set, to_print, epoch=epoch)
 
         if self.final_model is not None:
             self.model = self.final_model
             print('Final error:')
-            self.test(test_set, True)
+            self.test(test_set, True, is_final_model=True)
 
     def train_step(self, p_loader, n_loader,
                    p_validation, n_validation, convex):
@@ -209,10 +236,10 @@ class ClassifierFrom2(Classifier):
             losses.append(true_loss.item())
             loss.backward()
             self.optimizer.step()
-            if (i+1) % settings.validation_interval == 0:
-                # print(p_validation[0].shape)
-                # print(n_validation[0].shape)
-                self.validation(p_validation, n_validation, convex)
+            # if (i+1) % settings.validation_interval == 0:
+            #     # print(p_validation[0].shape)
+            #     # print(n_validation[0].shape)
+            #     self.validation(p_validation, n_validation, convex)
         self.optimizer.zero_grad()
         return np.mean(np.array(losses))
 
