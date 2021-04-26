@@ -21,7 +21,7 @@ uv_num = 2000
 
 u_cut = 40000
 
-pi = 0.4
+pi = 0.5
 true_rho = 0.3
 rho = 0.3
 
@@ -61,15 +61,19 @@ non_negative = True
 nn_threshold = 0
 nn_rate = 1
 
-pu_prob_est = True
+# pu_prob_est = True
+pu_prob_est = False
 use_true_post = False
 
-partial_n = True
+# partial_n = True
+partial_n = False
 hard_label = False
 
 pu_then_pn = False
+pn_then_pu = False
+unbiased_pn = False
 iwpn = False
-pu = False
+pu = True
 pnu = False
 
 random_seed = 0
@@ -129,31 +133,31 @@ params = OrderedDict([
 ])
 
 
-transform = transforms.Compose(
-    [transforms.ToTensor(),
-     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
-
-# Load and transform data
-cifar10 = torchvision.datasets.CIFAR10(
-    './data/CIFAR10', train=True, download=True, transform=transform)
-
-cifar10_test = torchvision.datasets.CIFAR10(
-    './data/CIFAR10', train=False, download=True, transform=transform)
-
-
-train_data = torch.zeros(cifar10.train_data.shape)
-train_data = train_data.permute(0, 3, 1, 2)
-# must use one dimensional vector
-train_labels = torch.tensor(cifar10.train_labels)
-
-for i, (image, _) in enumerate(cifar10):
-    train_data[i] = image
-
-test_data = torch.zeros(cifar10_test.test_data.shape)
-test_data = test_data.permute(0, 3, 1, 2)
-test_labels = torch.tensor(cifar10_test.test_labels)
-
-for i, (image, _) in enumerate(cifar10_test):
-    test_data[i] = image
+# transform = transforms.Compose(
+#     [transforms.ToTensor(),
+#      transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+#
+# # Load and transform data
+# cifar10 = torchvision.datasets.CIFAR10(
+#     './data/CIFAR10', train=True, download=True, transform=transform)
+#
+# cifar10_test = torchvision.datasets.CIFAR10(
+#     './data/CIFAR10', train=False, download=True, transform=transform)
+#
+#
+# train_data = torch.zeros(cifar10.train_data.shape)
+# train_data = train_data.permute(0, 3, 1, 2)
+# # must use one dimensional vector
+# train_labels = torch.tensor(cifar10.train_labels)
+#
+# for i, (image, _) in enumerate(cifar10):
+#     train_data[i] = image
+#
+# test_data = torch.zeros(cifar10_test.test_data.shape)
+# test_data = test_data.permute(0, 3, 1, 2)
+# test_labels = torch.tensor(cifar10_test.test_labels)
+#
+# for i, (image, _) in enumerate(cifar10_test):
+#     test_data[i] = image
 
 Net = PreActResNet18

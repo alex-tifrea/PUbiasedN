@@ -1,0 +1,39 @@
+? |-
+
+  pi
+: 0.5
+
+? |-
+
+  cls_training_epochs
+: 200
+convex_epochs: 200
+
+? |-
+
+  learning_rate_cls
+: 0.001
+weight_decay: 0.0001
+
+? |-
+
+  non_negative
+: True
+nn_threshold: 0
+nn_rate: 1
+
+? |-
+
+  pu_prob_est
+: False
+
+? |-
+
+  partial_n
+: False
+
+pn_then_pu: False
+pu_then_pn: False
+pu: True
+pnu: False
+unbiased_pn: False
