@@ -134,57 +134,76 @@ params = OrderedDict([
 
 # torchvision.datasets.MNIST outputs a set of PIL images
 # We transform them to tensors
-transform = transforms.Compose(
-    [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+# transform = transforms.Compose(
+#     [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,)), transforms.Lambda(lambda x: torch.flatten(x))])
 
-# Load and transform data
-mnist = torchvision.datasets.MNIST(
-    './data/MNIST', train=True, download=True, transform=transform)
-
-mnist_test = torchvision.datasets.MNIST(
-    './data/MNIST', train=False, download=True, transform=transform)
-
-
-train_data = torch.zeros(mnist.train_data.size())
-
-for i, (image, _) in enumerate(mnist):
-    train_data[i] = image
-
-train_data = train_data.unsqueeze(1)
-train_labels = mnist.train_labels
-
-test_data = torch.zeros(mnist_test.test_data.size())
-
-for i, (image, _) in enumerate(mnist_test):
-    test_data[i] = image
-
-test_data = test_data.unsqueeze(1)
-test_labels = mnist_test.test_labels
+# # Load and transform data
+# mnist = torchvision.datasets.MNIST(
+#     './data/MNIST', train=True, download=True, transform=transform)
+#
+# mnist_test = torchvision.datasets.MNIST(
+#     './data/MNIST', train=False, download=True, transform=transform)
+#
+#
+# train_data = torch.zeros(mnist.train_data.size()).reshape(-1, 784)
+#
+# for i, (image, _) in enumerate(mnist):
+#     train_data[i] = image
+#
+# train_data = train_data.unsqueeze(1)
+# train_labels = mnist.train_labels
+#
+# test_data = torch.zeros(mnist_test.test_data.size()).reshape(-1, 784)
+#
+# for i, (image, _) in enumerate(mnist_test):
+#     test_data[i] = image
+#
+# test_data = test_data.unsqueeze(1)
+# test_labels = mnist_test.test_labels
 
 # for i in range(10):
 #     print(torch.sum(train_labels == i))
 
 
+# class Net(nn.Module):
+#
+#     def __init__(self, num_classes=1):
+#         super(Net, self).__init__()
+#         self.conv1 = nn.Conv2d(1, 5, 5, 1)
+#         self.bn1 = nn.BatchNorm2d(5)
+#         self.conv2 = nn.Conv2d(5, 10, 5, 1)
+#         self.bn2 = nn.BatchNorm2d(10)
+#         self.fc1 = nn.Linear(4*4*10, 40)
+#         self.fc2 = nn.Linear(40, num_classes)
+#
+#     def forward(self, x):
+#         # x = F.relu(self.bn1(self.conv1(x)))
+#         x = F.relu(self.conv1(x))
+#         x = F.max_pool2d(x, 2, 2)
+#         # x = F.relu(self.bn2(self.conv2(x)))
+#         x = F.relu(self.conv2(x))
+#         x = F.max_pool2d(x, 2, 2)
+#         x = x.view(-1, 4*4*10)
+#         x = F.relu(self.fc1(x))
+#         x = F.dropout(x, training=self.training)
+#         x = self.fc2(x)
+#         return x
+
+# TODO: adjust this to our arch.
 class Net(nn.Module):
 
     def __init__(self, num_classes=1):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 5, 5, 1)
-        self.bn1 = nn.BatchNorm2d(5)
-        self.conv2 = nn.Conv2d(5, 10, 5, 1)
-        self.bn2 = nn.BatchNorm2d(10)
-        self.fc1 = nn.Linear(4*4*10, 40)
-        self.fc2 = nn.Linear(40, num_classes)
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(784, 100)
+        self.fc2 = nn.Linear(100, 100)
+        self.fc3 = nn.Linear(100, 100)
+        self.fc4 = nn.Linear(100, num_classes)
 
     def forward(self, x):
-        # x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x, 2, 2)
-        # x = F.relu(self.bn2(self.conv2(x)))
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = x.view(-1, 4*4*10)
+        x = self.flatten(x)
         x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
-        x = self.fc2(x)
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
         return x

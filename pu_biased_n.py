@@ -7,6 +7,7 @@ import numpy as np
 
 import torch
 import torch.utils.data
+import tensorflow as tf
 from tensorboardX import SummaryWriter
 
 from sklearn.svm import LinearSVC
@@ -16,6 +17,8 @@ import training
 import settings
 from utils import save_checkpoint, load_checkpoint
 from newsgroups.cbs import generate_cbs_features
+import torchvision.transforms as transforms
+from reproduction import lib_data
 
 
 parser = argparse.ArgumentParser(description='Main File')
@@ -23,29 +26,43 @@ parser = argparse.ArgumentParser(description='Main File')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 
-parser.add_argument('--dataset', type=str, default='mnist',
-                    help='Name of dataset: mnist, cifar10 or newsgroups')
+# parser.add_argument('--dataset', type=str, default='mnist',
+#                     help='Name of dataset: mnist, cifar10 or newsgroups')
 
 parser.add_argument('--random-seed', type=int, default=None)
 parser.add_argument('--params-path', type=str, default=None)
 parser.add_argument('--ppe-save-path', type=str, default=None)
 parser.add_argument('--ppe-load-path', type=str, default=None)
 
+parser.add_argument("--id_dataset", required=True)
+parser.add_argument("--ood_dataset", required=True)
+parser.add_argument("--experiment_name", required=True)
+
+
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 
-prepare_data = importlib.import_module(f'{args.dataset}.pu_biased_n')
-params = prepare_data.params
-Net = prepare_data.Net
-if args.dataset == 'newsgroups':
-    NetCBS = prepare_data.NetCBS
-train_data_orig = prepare_data.train_data
-test_data_orig = prepare_data.test_data
-train_labels_orig = prepare_data.train_labels
-test_labels = prepare_data.test_labels
+# XXX: Load model architecture and data sets.
+if "mnist" in args.id_dataset:
+    prepare_data = importlib.import_module("mnist.pu_biased_n")
+    params = prepare_data.params
+    Net = prepare_data.Net
+else:
+    # TODO: pick one of mammalP and transportP to move in cifar10
+    prepare_data = importlib.import_module("cifar10.pu_biased_n")
+    params = prepare_data.params
+    Net = prepare_data.Net
+# if args.dataset == 'newsgroups':
+#     NetCBS = prepare_data.NetCBS
+# train_data_orig = prepare_data.train_data
+# test_data_orig = prepare_data.test_data
+# train_labels_orig = prepare_data.train_labels
+# test_labels = prepare_data.test_labels
 
 
+
+# XXX: parse parameters (from param file and from the file loaded for the dataset).
 if args.params_path is not None:
     with open(args.params_path) as f:
         params_file = yaml.load(f)
@@ -159,131 +176,144 @@ for key, value in params.items():
 print('\nvalidation_interval', settings.validation_interval)
 print('', flush=True)
 
-
-def posteriors(labels):
-    posteriors = torch.zeros(labels.size())
-    for i in range(num_classes):
-        if i in positive_classes:
-            posteriors[labels == i] = 1
-        else:
-            posteriors[labels == i] = neg_ps[i] * rho * 1/priors[i]
-    return posteriors.unsqueeze(1)
+# ======================================================================================================================
 
 
-def pick_p_data(data, labels, n):
-    p_idxs = np.zeros_like(labels)
-    for i in range(num_classes):
-        if i in positive_classes:
-            p_idxs[(labels == i).numpy().astype(bool)] = 1
-    p_idxs = np.argwhere(p_idxs == 1).reshape(-1)
-    selected_p = np.random.choice(p_idxs, n, replace=False)
-    return data[selected_p], posteriors(labels[selected_p])
-
-
-def pick_n_data(data, labels, n):
-    n_idxs = np.zeros_like(labels)
-    for i in range(num_classes):
-        if negative_classes is None:
-            if i not in positive_classes:
-                n_idxs[(labels == i).numpy().astype(bool)] = 1
-        else:
-            if i in negative_classes:
-                n_idxs[(labels == i).numpy().astype(bool)] = 1
-    n_idxs = np.argwhere(n_idxs == 1).reshape(-1)
-    selected_n = np.random.choice(n_idxs, n, replace=False)
-    return data[selected_n], labels[selected_n]
-
-
-def pick_sn_data(data, labels, n):
-    neg_nums = np.random.multinomial(n, neg_ps)
-    print('numbers in each subclass', neg_nums)
-    selected_sn = []
-    for i in range(num_classes):
-        if neg_nums[i] != 0:
-            idxs = np.argwhere(labels == i).reshape(-1)
-            selected = np.random.choice(idxs, neg_nums[i], replace=False)
-            selected_sn.extend(selected)
-    selected_sn = np.array(selected_sn)
-    return data[selected_sn], posteriors(labels[selected_sn])
-
-
-def pick_u_data(data, labels, n):
-    if negative_classes is None:
-        selected_u = np.random.choice(len(data), n, replace=False)
-    else:
-        u_idxs = np.zeros_like(labels)
-        for i in range(num_classes):
-            if i in positive_classes or i in negative_classes:
-                u_idxs[(labels == i).numpy().astype(bool)] = 1
-        u_idxs = np.argwhere(u_idxs == 1).reshape(-1)
-        selected_u = np.random.choice(u_idxs, n, replace=False)
-    return data[selected_u], posteriors(labels[selected_u])
-
-
-t_labels = torch.zeros(test_labels.size())
-
-for i in range(num_classes):
-    if i in positive_classes:
-        t_labels[test_labels == i] = 1
-    elif negative_classes is None or i in negative_classes:
-        t_labels[test_labels == i] = -1
-    else:
-        t_labels[test_labels == i] = 0
-
-
-# accs = []
-# f1s = []
+# def posteriors(labels):
+#     posteriors = torch.zeros(labels.size())
+#     for i in range(num_classes):
+#         if i in positive_classes:
+#             posteriors[labels == i] = 1
+#         else:
+#             posteriors[labels == i] = neg_ps[i] * rho * 1/priors[i]
+#     return posteriors.unsqueeze(1)
 #
-# for i in range(1, 11):
 #
-#     np.random.seed(i)
-#     random.seed(i)
-#     torch.manual_seed(i)
-#     torch.cuda.manual_seed(i)
-#     torch.backends.cudnn.deterministic = True
+# def pick_p_data(data, labels, n):
+#     p_idxs = np.zeros_like(labels)
+#     for i in range(num_classes):
+#         if i in positive_classes:
+#             p_idxs[(labels == i).numpy().astype(bool)] = 1
+#     p_idxs = np.argwhere(p_idxs == 1).reshape(-1)
+#     selected_p = np.random.choice(p_idxs, n, replace=False)
+#     return data[selected_p], posteriors(labels[selected_p])
 #
-#     idxs = np.random.permutation(len(train_data_orig))
 #
-#     valid_data = train_data_orig[idxs][u_cut:]
-#     valid_labels = train_labels_orig[idxs][u_cut:]
-#     train_data = train_data_orig[idxs][:u_cut]
-#     train_labels = train_labels_orig[idxs][:u_cut]
-#
-#     u_data, u_pos = pick_u_data(train_data, train_labels, u_num)
-#     p_data, p_pos = pick_p_data(train_data, train_labels, p_num)
-#     sn_data, sn_pos = pick_sn_data(train_data, train_labels, sn_num)
-#     uv_data, uv_pos = pick_u_data(valid_data, valid_labels, uv_num)
-#     pv_data, pv_pos = pick_p_data(valid_data, valid_labels, pv_num)
-#     snv_data, snv_pos = pick_sn_data(valid_data, valid_labels, snv_num)
-#
-#     if cbs_feature:
-#         cbs_features = generate_cbs_features(
-#             p_data, sn_data, u_data,
-#             pv_data, snv_data, uv_data,
-#             test_data_orig, n_select_features=n_select_features,
-#             alpha=cbs_alpha, beta=cbs_beta)
-#         p_data, sn_data, u_data, pv_data, snv_data, uv_data, test_data = \
-#             [torch.tensor(data) for data in cbs_features]
-#         Net = NetCBS
+# def pick_u_data(data, labels, n):
+#     if negative_classes is None:
+#         selected_u = np.random.choice(len(data), n, replace=False)
 #     else:
-#         test_data = test_data_orig
-#
-#     clf = LinearSVC(max_iter=5000, C=svm_C)
-#     labels = np.concatenate(
-#         [np.ones(p_data.shape[0]), -np.ones(sn_data.shape[0])])
-#     clf.fit(np.concatenate([p_data, sn_data]), labels)
-#     acc = clf.score(test_data, t_labels.numpy())
-#     f1 = f1_score(t_labels.numpy(), clf.predict(test_data))
-#     accs.append(acc)
-#     f1s.append(f1)
-#     print('Accuracy: {:.2f}'.format(acc*100))
-#     print('F1-score: {:.2f}'.format(f1*100))
-#
-# print('Avg Accuracy: {:.2f}'.format(np.mean(accs)*100))
-# print('Std Accuracy: {:.2f}'.format(np.std(accs)*100))
-# print('Avg F1: {:.2f}'.format(np.mean(f1s)*100))
-# print('Std F1: {:.2f}'.format(np.std(f1s)*100))
+#         u_idxs = np.zeros_like(labels)
+#         for i in range(num_classes):
+#             if i in positive_classes or i in negative_classes:
+#                 u_idxs[(labels == i).numpy().astype(bool)] = 1
+#         u_idxs = np.argwhere(u_idxs == 1).reshape(-1)
+#         selected_u = np.random.choice(u_idxs, n, replace=False)
+#     return data[selected_u], posteriors(labels[selected_u])
 
+def get_dataset_size(dataset):
+    if dataset is None:
+        return 0
+    size = 0
+    for batch_X, batch_y in dataset:
+        y_shape = batch_y.shape
+        size += y_shape[0] if len(y_shape) > 0 else 1
+    return size
+
+def split_train_valid(dataset, split_ratio):
+    actual_dataset_size = get_dataset_size(dataset)
+    split2_size = int(actual_dataset_size * split_ratio)
+
+    if split2_size > 0:
+        split2_data = dataset.take(split2_size)
+    else:
+        split2_data = None
+
+    split1_data = dataset.skip(split2_size)
+    return split1_data, split2_data, split2_size
+
+# XXX: extract data sets: P, U, validation, test
+# train_data_orig = prepare_data.train_data
+# test_data_orig = prepare_data.test_data
+# train_labels_orig = prepare_data.train_labels
+# test_labels = prepare_data.test_labels
+
+total_batch_size = 128
+p_batch_size = int(pi * total_batch_size)
+u_batch_size = total_batch_size - p_batch_size
+valid_ratio = 0.2
+
+# Get tf datasets.
+max_dataset_size = 600000
+all_p_data_orig = lib_data.load_dataset(args.id_dataset, split="train", reindex_labels=True)
+p_test_data = lib_data.load_dataset(args.id_dataset, split="test", reindex_labels=True)
+n_test_data = lib_data.load_dataset(args.ood_dataset, split="test", reindex_labels=True)
+all_u_data_orig = p_test_data.concatenate(n_test_data)
+
+# TODO: remove
+# max_dataset_size = 5000
+all_u_data_orig = all_u_data_orig.take(max_dataset_size)
+all_p_data_orig = all_p_data_orig.take(max_dataset_size)
+
+all_p_data = all_p_data_orig.shuffle(max_dataset_size, seed=0)
+all_u_data = all_u_data_orig.shuffle(max_dataset_size, seed=0)
+
+p_set, p_validation, pv_size = split_train_valid(all_p_data, split_ratio=valid_ratio)
+u_set, u_validation = all_u_data, all_u_data.shuffle(max_dataset_size, seed=0).take(pv_size)
+
+test_set = p_test_data.map(lambda x, y: (x, 1)).concatenate(
+    n_test_data.map(lambda x, y: (x, 0))
+).shuffle(max_dataset_size)
+
+# Convert to torch tensors.
+p_set_np = next(p_set.batch(max_dataset_size).take(1).as_numpy_iterator())
+u_set_np = next(u_set.batch(max_dataset_size).take(1).as_numpy_iterator())
+p_validation_np = next(p_validation.batch(max_dataset_size).take(1).as_numpy_iterator())
+u_validation_np = next(u_validation.batch(max_dataset_size).take(1).as_numpy_iterator())
+test_set_np = next(test_set.batch(max_dataset_size).take(1).as_numpy_iterator())
+
+p_set = torch.Tensor(p_set_np[0]).permute([0, 3, 1, 2])
+u_set = torch.Tensor(u_set_np[0]).permute([0, 3, 1, 2])
+p_validation = torch.Tensor(p_validation_np[0]).permute([0, 3, 1, 2])
+u_validation = torch.Tensor(u_validation_np[0]).permute([0, 3, 1, 2])
+test_set = torch.Tensor(test_set_np[0]).permute([0, 3, 1, 2])
+test_labels = torch.Tensor(test_set_np[1])
+
+mlflow_params = {
+    "id_dataset": args.id_dataset,
+    "ood_dataset": args.ood_dataset,
+    "p_set_size": p_set.shape[0],
+    "u_set_size": u_set.shape[0],
+    "p_validation_size": p_validation.shape[0],
+    "u_validation_size": u_validation.shape[0],
+    "test_size": test_set.shape[0],
+    "batch_size": total_batch_size,
+    "pi": pi,
+    "epochs": cls_training_epochs,
+}
+
+print("MLFLOW params", mlflow_params)
+
+# Convert to torch datasets.
+p_set = torch.utils.data.TensorDataset(p_set, torch.ones(mlflow_params["p_set_size"]))
+u_set = torch.utils.data.TensorDataset(u_set, torch.zeros(mlflow_params["u_set_size"]))
+p_validation = p_validation, torch.ones(mlflow_params["p_validation_size"])
+u_validation = u_validation, torch.zeros(mlflow_params["u_validation_size"])
+test_set = torch.utils.data.TensorDataset(test_set, test_labels)
+
+# p_set, u_set = convert_dataset(p_set.map(lambda x, y: x)), convert_dataset(u_set.map(lambda x, y: x))
+# test_set = convert_dataset(test_set.map(lambda x, y: x))
+# p_validation, u_validation = convert_dataset(p_validation.map(lambda x, y: x)), convert_dataset(u_validation.map(lambda x, y: x))
+
+# t_labels = torch.zeros(test_labels.size())
+#
+# for i in range(num_classes):
+#     if i in positive_classes:
+#         t_labels[test_labels == i] = 1
+#     elif negative_classes is None or i in negative_classes:
+#         t_labels[test_labels == i] = -1
+#     else:
+#         t_labels[test_labels == i] = 0
 
 np.random.seed(random_seed)
 random.seed(random_seed)
@@ -292,216 +322,42 @@ torch.cuda.manual_seed(random_seed)
 torch.backends.cudnn.deterministic = True
 
 
-idxs = np.random.permutation(len(train_data_orig))
-
-valid_data = train_data_orig[idxs][u_cut:]
-valid_labels = train_labels_orig[idxs][u_cut:]
-train_data = train_data_orig[idxs][:u_cut]
-train_labels = train_labels_orig[idxs][:u_cut]
-
-
-u_data, u_pos = pick_u_data(train_data, train_labels, u_num)
-p_data, p_pos = pick_p_data(train_data, train_labels, p_num)
-sn_data, sn_pos = pick_sn_data(train_data, train_labels, sn_num)
-uv_data, uv_pos = pick_u_data(valid_data, valid_labels, uv_num)
-pv_data, pv_pos = pick_p_data(valid_data, valid_labels, pv_num)
-snv_data, snv_pos = pick_sn_data(valid_data, valid_labels, snv_num)
-
-if cbs_feature:
-    cbs_features = generate_cbs_features(
-        p_data, sn_data, u_data,
-        pv_data, snv_data, uv_data,
-        test_data_orig, n_select_features=n_select_features,
-        alpha=cbs_alpha, beta=cbs_beta)
-    p_data, sn_data, u_data, pv_data, snv_data, uv_data, test_data = \
-        [torch.tensor(data) for data in cbs_features]
-    Net = NetCBS
-else:
-    test_data = test_data_orig
-
-
-# u_pos = torch.rand_like(u_pos)
-u_set = torch.utils.data.TensorDataset(u_data, u_pos)
-u_validation = uv_data, uv_pos
-
-p_set = torch.utils.data.TensorDataset(p_data, p_pos)
-p_validation = pv_data, pv_pos
-
-sn_set = torch.utils.data.TensorDataset(sn_data, sn_pos)
-sn_validation = snv_data, snv_pos
-
-if not cbs_feature:
-    # Not considering cbs feature here
-    n_set = torch.utils.data.TensorDataset(
-        *pick_n_data(train_data, train_labels, n_num))
-    n_validation = pick_n_data(valid_data, valid_labels, nv_num)
+# idxs = np.random.permutation(len(train_data_orig))
+#
+# valid_data = train_data_orig[idxs][u_cut:]
+# valid_labels = train_labels_orig[idxs][u_cut:]
+# train_data = train_data_orig[idxs][:u_cut]
+# train_labels = train_labels_orig[idxs][:u_cut]
+#
+#
+# u_data, u_pos = pick_u_data(train_data, train_labels, u_num)
+# p_data, p_pos = pick_p_data(train_data, train_labels, p_num)
+# uv_data, uv_pos = pick_u_data(valid_data, valid_labels, uv_num)
+# pv_data, pv_pos = pick_p_data(valid_data, valid_labels, pv_num)
+# test_data = test_data_orig
+#
+# test_posteriors = posteriors(test_labels)
+# test_idxs = np.argwhere(t_labels != 0).reshape(-1)
+# test_set = torch.utils.data.TensorDataset(
+#     test_data[test_idxs],
+#     t_labels.unsqueeze(1).float()[test_idxs],
+#     test_posteriors[test_idxs])
+#
+#
+# XXX: need to set u_set, p_set, u_validation, p_validation, test_set
+# XXX: can ignore u_pos, p_pos etc for the purpose of nnPU
+#
+# u_set = torch.utils.data.TensorDataset(u_data, u_pos)
+# u_set = torch.utils.data.TensorDataset(test_data[test_idxs],)
+# u_validation = uv_data,
+#
+# p_set = torch.utils.data.TensorDataset(p_data,)
+# p_validation = pv_data,
 
 
-test_posteriors = posteriors(test_labels)
-test_idxs = np.argwhere(t_labels != 0).reshape(-1)
+# TODO: add lr as metric in mlflow
 
-test_set = torch.utils.data.TensorDataset(
-    test_data[test_idxs],
-    t_labels.unsqueeze(1).float()[test_idxs],
-    test_posteriors[test_idxs])
-
-# print(len(test_set.tensors[0]))
-
-
-if svm:
-    clf = LinearSVC(max_iter=5000)
-    labels = np.concatenate(
-        [np.ones(p_data.shape[0]), -np.ones(sn_data.shape[0])])
-    clf.fit(np.concatenate([p_data, sn_data]), labels)
-    print('Accuracy: {:.2f}'.format(
-          clf.score(test_data, t_labels.numpy())*100))
-    print('F1-score: {:.2f}'.format(
-          f1_score(t_labels.numpy(), clf.predict(test_data))*100))
-
-
-if pu_prob_est and ppe_load_name is None:
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    ppe = training.PUClassifier3(
-            model, pi=pi, rho=rho,
-            lr=learning_rate_ppe, weight_decay=weight_decay,
-            nn=non_negative, nn_threshold=nn_threshold, nn_rate=nn_rate,
-            milestones=milestones_ppe, lr_d=lr_d, prob_est=True)
-    ppe.train(p_set, sn_set, u_set, test_set,
-              p_batch_size, sn_batch_size, u_batch_size,
-              p_validation, sn_validation, u_validation,
-              cls_training_epochs, convex_epochs=convex_epochs)
-    if ppe_save_name is not None:
-        save_checkpoint(ppe.model, cls_training_epochs, ppe_save_name)
-    ppe_model = ppe.model
-
-if ppe_load_name is not None:
-    ppe_model = Net().cuda() if args.cuda else Net()
-    ppe_model = load_checkpoint(ppe_model, ppe_load_name)
-
-
-if (partial_n or (iwpn and (adjust_p or adjust_sn))) and not use_true_post:
-    p_set = torch.utils.data.TensorDataset(
-        p_set.tensors[0], torch.sigmoid(
-            training.Training()
-            .feed_in_batches(ppe_model, p_set.tensors[0])).cpu())
-    sn_set = torch.utils.data.TensorDataset(
-        sn_set.tensors[0], torch.sigmoid(
-            training.Training()
-            .feed_in_batches(ppe_model, sn_set.tensors[0])).cpu())
-    u_set = torch.utils.data.TensorDataset(
-        u_set.tensors[0], torch.sigmoid(
-            training.Training()
-            .feed_in_batches(ppe_model, u_set.tensors[0])).cpu())
-    p_validation = p_validation[0], torch.sigmoid(
-        training.Training()
-        .feed_in_batches(ppe_model, p_validation[0])).cpu()
-    sn_validation = sn_validation[0], torch.sigmoid(
-        training.Training()
-        .feed_in_batches(ppe_model, sn_validation[0])).cpu()
-    u_validation = u_validation[0], torch.sigmoid(
-        training.Training()
-        .feed_in_batches(ppe_model, u_validation[0])).cpu()
-
-# eta
-sep_value = np.percentile(
-    u_set.tensors[1].numpy().reshape(-1), int((1-pi-true_rho)*u_per*100))
-print('\nsep_value =', sep_value)
-
-
-if cbs_feature_later:
-    cbs_features = generate_cbs_features(
-        p_data.numpy(), sn_data.numpy(), u_data.numpy(),
-        pv_data.numpy(), snv_data.numpy(), uv_data.numpy(),
-        test_data.numpy(), n_select_features=n_select_features,
-        alpha=cbs_alpha, beta=cbs_beta)
-    p_data, sn_data, u_data, pv_data, snv_data, uv_data, test_data = \
-        [torch.tensor(data) for data in cbs_features]
-    Net = NetCBS
-
-u_set = torch.utils.data.TensorDataset(u_data, u_set.tensors[1])
-u_validation = uv_data, u_validation[1]
-
-p_set = torch.utils.data.TensorDataset(p_data, p_set.tensors[1])
-p_validation = pv_data, p_validation[1]
-
-sn_set = torch.utils.data.TensorDataset(sn_data, sn_set.tensors[1])
-sn_validation = snv_data, sn_validation[1]
-
-test_set = torch.utils.data.TensorDataset(
-    test_data[test_idxs], test_set.tensors[1], test_set.tensors[2])
-
-
-if partial_n:
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    cls = training.PUbNClassifier(
-            model, balanced=balanced, pi=pi, rho=rho,
-            sep_value=sep_value,
-            adjust_p=adjust_p, adjust_sn=adjust_sn, hard_label=hard_label,
-            lr=learning_rate_cls, weight_decay=weight_decay,
-            milestones=milestones, lr_d=lr_d)
-    cls.train(p_set, sn_set, u_set, test_set,
-              p_batch_size, sn_batch_size, u_batch_size,
-              p_validation, sn_validation, u_validation,
-              cls_training_epochs, convex_epochs=convex_epochs)
-
-if iwpn:
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    cls = training.PNClassifier(
-            model, pi=pi/(pi+rho),
-            adjust_p=adjust_p, adjust_n=adjust_sn,
-            lr=learning_rate_cls, weight_decay=weight_decay,
-            milestones=milestones, lr_d=lr_d)
-    cls.train(p_set, sn_set, test_set, p_batch_size, sn_batch_size,
-              p_validation, sn_validation,
-              cls_training_epochs, convex_epochs=convex_epochs)
-
-if pn_then_pu:
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    cls = training.PNClassifier(
-            model, pi=pi/(pi+rho),
-            lr=learning_rate_cls, weight_decay=weight_decay,
-            milestones=milestones, lr_d=lr_d)
-    cls.train(p_set, sn_set, test_set, p_batch_size, sn_batch_size,
-              p_validation, sn_validation,
-              cls_training_epochs, convex_epochs=convex_epochs)
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    cls2 = training.PUClassifier(
-            model, pn_model=cls.model, pi=pi, balanced=balanced,
-            lr=learning_rate_cls, weight_decay=weight_decay,
-            milestones=milestones, lr_d=lr_d,
-            nn=non_negative, nn_threshold=nn_threshold, nn_rate=nn_rate)
-    cls2.train(p_set, u_set, test_set, p_batch_size, u_batch_size,
-               p_validation, u_validation,
-               cls_training_epochs, convex_epochs=convex_epochs)
-
-if pu_then_pn:
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    cls = training.PUClassifier3(
-            model, pi=pi, rho=rho,
-            lr=learning_rate_ppe, weight_decay=weight_decay,
-            nn=non_negative, nn_threshold=nn_threshold, nn_rate=nn_rate,
-            milestones=milestones, lr_d=lr_d)
-    cls.train(p_set, sn_set, u_set, test_set,
-              p_batch_size, sn_batch_size, u_batch_size,
-              p_validation, sn_validation, u_validation,
-              cls_training_epochs, convex_epochs=convex_epochs)
-
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    cls2 = training.PNClassifier(
-            model, pi=pi/(pi+rho), pu_model=cls.model,
-            lr=learning_rate_cls, weight_decay=weight_decay,
-            milestones=milestones, lr_d=lr_d)
-    cls2.train(p_set, sn_set, test_set, p_batch_size, sn_batch_size,
-               p_validation, sn_validation,
-               cls_training_epochs, convex_epochs=convex_epochs)
-
+# This does nnPU.
 if pu:
     print('')
     model = Net().cuda() if args.cuda else Net()
@@ -514,48 +370,22 @@ if pu:
               p_validation, u_validation,
               cls_training_epochs, convex_epochs=convex_epochs)
 
-if pnu:
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    cls = training.PNUClassifier(
-            model, pi=pi,
-            lr=learning_rate_cls, weight_decay=weight_decay,
-            milestones=milestones, lr_d=lr_d,
-            pn_fraction=non_pu_fraction,
-            nn=non_negative, nn_threshold=nn_threshold, nn_rate=nn_rate)
-    cls.train(p_set, sn_set, u_set, test_set,
-              p_batch_size, sn_batch_size, u_batch_size,
-              p_validation, sn_validation, u_validation,
-              cls_training_epochs, convex_epochs=convex_epochs)
 
-if unbiased_pn:
-    print('')
-    model = Net().cuda() if args.cuda else Net()
-    cls = training.PNClassifier(
-            model, pi=pi,
-            lr=learning_rate_cls, weight_decay=weight_decay,
-            milestones=milestones, lr_d=lr_d)
-    cls.train(p_set, sn_set, test_set, p_batch_size, sn_batch_size,
-              p_validation, sn_validation,
-              cls_training_epochs, convex_epochs=convex_epochs)
-
-
-n_embedding_points = 500
-
-if visualize:
-
-    indx = np.random.choice(test_data.size(0), size=n_embedding_points)
-
-    embedding_data = test_data[indx]
-    embedding_labels = t_labels.numpy().copy()
-    # Negative data that are not sampled
-    embedding_labels[test_posteriors.numpy().flatten() < 1/2] = 0
-    embedding_labels = embedding_labels[indx]
-    features = cls.last_layer_activation(embedding_data)
-    writer = SummaryWriter(log_dir=log_dir)
-    # writer.add_embedding(embedding_data.view(n_embedding_points, -1),
-    #                      metadata=embedding_labels,
-    #                      tag='Input', global_step=0)
-    writer.add_embedding(features, metadata=embedding_labels,
-                         tag='PUbN Features',
-                         global_step=cls_training_epochs)
+# n_embedding_points = 500
+# if visualize:
+#
+#     indx = np.random.choice(test_data.size(0), size=n_embedding_points)
+#
+#     embedding_data = test_data[indx]
+#     embedding_labels = t_labels.numpy().copy()
+#     # Negative data that are not sampled
+#     embedding_labels[test_posteriors.numpy().flatten() < 1/2] = 0
+#     embedding_labels = embedding_labels[indx]
+#     features = cls.last_layer_activation(embedding_data)
+#     writer = SummaryWriter(log_dir=log_dir)
+#     # writer.add_embedding(embedding_data.view(n_embedding_points, -1),
+#     #                      metadata=embedding_labels,
+#     #                      tag='Input', global_step=0)
+#     writer.add_embedding(features, metadata=embedding_labels,
+#                          tag='PUbN Features',
+#                          global_step=cls_training_epochs)

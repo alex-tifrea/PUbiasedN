@@ -177,6 +177,7 @@ class ClassifierFrom2(Classifier):
 
         for epoch in range(num_epochs):
 
+            # XXX: warm-up with log sigmoid before training with sigmoid?
             convex = True if epoch < convex_epochs else False
             average_loss = self.train_step(
                 p_loader, n_loader,
@@ -262,6 +263,7 @@ class PNClassifier(ClassifierFrom2):
         self.compute_classification_metrics(labels, pred, to_print=to_print)
 
 
+# XXX: nnPU classifier.
 class PUClassifier(ClassifierFrom2):
 
     def __init__(self, model, pn_model=None,
@@ -278,6 +280,7 @@ class PUClassifier(ClassifierFrom2):
         super().__init__(model, *args, **kwargs)
 
     def compute_loss(self, px, ux, convex, validation=False):
+        # XXX: ignore completely px[1] and ux[1] which contain the posterior probability for each sample
         px, ux = px[0], ux[0]
         if validation:
             fpx = self.feed_in_batches(self.model, px)
