@@ -204,7 +204,7 @@ class ClassifierFrom2(Classifier):
                 train_acc = (p_pred[p_pred > 0].shape[0] + n_pred[n_pred < 0].shape[0]) / (p_pred.shape[0] + n_pred.shape[0])
 
                 lib_data.retry(lambda: mlflow.log_metrics({
-                    "lr": self.scheduler.get_lr(),
+                    "lr": self.scheduler.get_lr()[0],
                     "val_loss": validation_loss.item(),
                     "train_loss": average_loss,
                     "train_acc": train_acc,

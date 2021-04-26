@@ -16,7 +16,6 @@ from sklearn.metrics import f1_score
 
 import training
 import settings
-from utils import save_checkpoint, load_checkpoint
 from newsgroups.cbs import generate_cbs_features
 import torchvision.transforms as transforms
 from reproduction import lib_data
@@ -30,7 +29,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
 # parser.add_argument('--dataset', type=str, default='mnist',
 #                     help='Name of dataset: mnist, cifar10 or newsgroups')
 
-parser.add_argument('--random-seed', type=int, default=None)
+parser.add_argument('--random-seed', type=int, default=0)
 parser.add_argument('--params-path', type=str, default=None)
 parser.add_argument('--ppe-save-path', type=str, default=None)
 parser.add_argument('--ppe-load-path', type=str, default=None)

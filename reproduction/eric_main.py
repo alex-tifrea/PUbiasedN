@@ -1,5 +1,4 @@
 import lib_data
-import mlflow
 import os
 import subprocess
 import argparse
@@ -14,19 +13,31 @@ def main():
 
     lib_data.setup_mlflow()
     os.environ["MLFLOW_EXPERIMENT_NAME"] = args.experiment_name
-    mlflow.set_experiment(args.experiment_name)
 
-    with mlflow.start_run() as run:
-        run_id = run.info.run_id
-        os.environ["MLFLOW_RUN_ID"] = run_id
-        mlflow.log_param("run_id", run_id)
+    params_path = ""
+    if "mnist" in args.id_dataset:
+        params_path = "params/mnist/my_nnPU.yml"
 
-        mlflow.log_params(
-            {
-                "id_dataset": args.id_dataset,
-                "ood_dataset": args.ood_dataset,
-            }
-        )
+    for start_lr in [0.0001, 0.001, 0.01]:
+        for nnpu_threshold in [-0.1, 0.01, 0., 0.01, 0.1]:
+            subprocess.check_call(
+                [
+                    "python3",
+                    "pu_biased_n.py",
+                    "--id_dataset",
+                    args.id_dataset,
+                    "--ood_dataset",
+                    args.ood_dataset,
+                    "--experiment_name",
+                    args.experiment_name,
+                    "--params-path",
+                    params_path,
+                    "-wp",
+                    f"learning_rate_cls={start_lr}",
+                    "-wp",
+                    f"nn_threshold={nnpu_threshold}",
+                ]
+            )
 
 
 if __name__ == "__main__":

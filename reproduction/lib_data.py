@@ -7,9 +7,8 @@ import torch
 import mlflow
 from typing import Tuple, List, Optional
 import sklearn.metrics as metrics
-from .lib_image import normalize_image
-from . import lib_celeb_a
-from . import lib_waterbirds
+# import lib_celeb_a
+# import lib_waterbirds
 
 import requests
 import time
@@ -141,10 +140,10 @@ def load_dataset(
     if "objectnet" in dataset_name:
         assert split == "test"
         D = load_objectnet(dataset_name)
-    elif lib_celeb_a.is_celeb_a(dataset_name):
-        return lib_celeb_a.load_dataset(dataset_name, split)
-    elif lib_waterbirds.is_waterbirds(dataset_name):
-        return lib_waterbirds.load_dataset(dataset_name, split)
+    # elif lib_celeb_a.is_celeb_a(dataset_name):
+    #     return lib_celeb_a.load_dataset(dataset_name, split)
+    # elif lib_waterbirds.is_waterbirds(dataset_name):
+    #     return lib_waterbirds.load_dataset(dataset_name, split)
     else:
         D = tfds.load(
             dataset_name,
@@ -203,11 +202,11 @@ def to_torch(D: tf.data.Dataset) -> CustomTensorDataset:
 
 
 def get_num_classes(dataset_name: str, reindex_labels: bool = False) -> int:
-    if lib_celeb_a.is_celeb_a(dataset_name):
-        return 2
-
-    if lib_waterbirds.is_waterbirds(dataset_name):
-        return 2
+    # if lib_celeb_a.is_celeb_a(dataset_name):
+    #     return 2
+    #
+    # if lib_waterbirds.is_waterbirds(dataset_name):
+    #     return 2
 
     if "+" in dataset_name:
         return len(dataset_name.split("+"))
@@ -230,11 +229,11 @@ def get_image_size(dataset_name: str) -> Tuple[int, int, int]:
             assert get_image_size(d) == image_size
         return image_size
 
-    if lib_celeb_a.is_celeb_a(dataset_name):
-        return lib_celeb_a.get_image_size(dataset_name)
-
-    if lib_waterbirds.is_waterbirds(dataset_name):
-        return lib_waterbirds.get_image_size(dataset_name)
+    # if lib_celeb_a.is_celeb_a(dataset_name):
+    #     return lib_celeb_a.get_image_size(dataset_name)
+    #
+    # if lib_waterbirds.is_waterbirds(dataset_name):
+    #     return lib_waterbirds.get_image_size(dataset_name)
 
     if ":" in dataset_name:
         dataset_name, _filter_labels = dataset_name.split(":")
