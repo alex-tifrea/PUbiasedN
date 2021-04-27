@@ -139,7 +139,7 @@ u_batch_size = params['u_batch_size']
 
 learning_rate_cls = params['\nlearning_rate_cls']
 weight_decay = params['weight_decay']
-optimizer = params['optimizer']
+use_sgd = params['use_sgd']
 
 if 'learning_rate_ppe' in params:
     learning_rate_ppe = params['learning_rate_ppe']
@@ -191,6 +191,7 @@ if priors is None:
 
 settings.dtype = torch.cuda.FloatTensor if args.cuda else torch.FloatTensor
 
+optimizer = "sgd" if use_sgd else "adam"
 
 for key, value in params.items():
     print('{}: {}'.format(key, value))

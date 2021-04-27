@@ -51,7 +51,7 @@ p_batch_size = 10
 sn_batch_size = 10
 u_batch_size = 100
 
-optimizer = "adam"
+use_sgd = False
 learning_rate_ppe = 1e-3
 learning_rate_cls = 1e-3
 weight_decay = 1e-4
@@ -119,7 +119,7 @@ params = OrderedDict([
     ('weight_decay', weight_decay),
     ('milestones', milestones),
     ('lr_d', lr_d),
-    ('optimizer', optimizer),
+    ('use_sgd', use_sgd),
     ('\nnon_negative', non_negative),
     ('nn_threshold', nn_threshold),
     ('nn_rate', nn_rate),
