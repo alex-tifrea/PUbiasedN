@@ -72,14 +72,17 @@ Python program to run for each experiment. It must accept the following flags:
                                 lib_jobs.launch_local(args.py_to_run, cli_args, gin_args)
                                 continue
 
-                            if "mnist" in id_dataset:
-                                nhours = 1
-                            elif "cifar10:" in id_dataset or "cifar100:" in id_dataset:
-                                nhours = 4
-                            elif "svhn" in id_dataset:
-                                nhours = 6
-                            else:
-                                nhours = 24
+                        if "mnist" in id_dataset:
+                            nhours = 1
+                        elif "cifar10:" in id_dataset or "cifar100:" in id_dataset:
+                            nhours = 4
+                        elif "svhn_cropped:" in id_dataset:
+                            nhours = 4
+#                             nhours = 6
+                        elif "imagenet" in id_dataset:
+                            nhours = 24
+                        else:
+                            nhours = 6
 
                             lib_jobs.launch_bsub(
                                 nhours,
