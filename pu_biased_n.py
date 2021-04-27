@@ -138,6 +138,7 @@ u_batch_size = params['u_batch_size']
 
 learning_rate_cls = params['\nlearning_rate_cls']
 weight_decay = params['weight_decay']
+optimizer = params['optimizer']
 
 if 'learning_rate_ppe' in params:
     learning_rate_ppe = params['learning_rate_ppe']
@@ -269,8 +270,6 @@ p_test_data = lib_data.load_dataset(args.id_dataset, split="test", reindex_label
 n_test_data = lib_data.load_dataset(args.ood_dataset, split="test", reindex_labels=True)
 all_u_data_orig = p_test_data.concatenate(n_test_data)
 
-# TODO: remove
-# max_dataset_size = 5000
 all_u_data_orig = all_u_data_orig.take(max_dataset_size)
 all_p_data_orig = all_p_data_orig.take(max_dataset_size)
 
@@ -310,6 +309,7 @@ mlflow_params = {
     "batch_size": total_batch_size,
     "pi": pi,
     "epochs": cls_training_epochs,
+    "optimizer": optimizer,
     "start_lr": learning_rate_cls,
     "nnpu_threshold": nn_threshold,
     "nnpu_stepsize": nn_rate,
@@ -378,8 +378,6 @@ torch.backends.cudnn.deterministic = True
 # p_validation = pv_data,
 
 
-# TODO: add lr as metric in mlflow
-
 # This does nnPU.
 if pu:
     lib_data.setup_mlflow()
@@ -399,7 +397,7 @@ if pu:
             nn=non_negative, nn_threshold=nn_threshold, nn_rate=nn_rate)
     cls.train(p_set, u_set, test_set, p_batch_size, u_batch_size,
               p_validation, u_validation,
-              cls_training_epochs, convex_epochs=convex_epochs)
+              cls_training_epochs, convex_epochs=convex_epochs, optimizer=optimizer)
 
     # retry(lambda: mlflow.log_metrics(best_result))
     lib_data.retry(lambda: mlflow.end_run())
