@@ -24,6 +24,7 @@ u_cut = 40000
 pi = 0.5
 true_rho = 0.3
 rho = 0.3
+transductive = True
 
 positive_classes = [0, 1, 8, 9]
 negative_classes = [2, 3, 4, 5, 6, 7]
@@ -99,6 +100,7 @@ params = OrderedDict([
     ('\npi', pi),
     ('rho', rho),
     ('true_rho', true_rho),
+    ('transductive', transductive),
     ('\npositive_classes', positive_classes),
     ('negative_classes', negative_classes),
     ('neg_ps', neg_ps),

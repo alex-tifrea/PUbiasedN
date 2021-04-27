@@ -116,6 +116,7 @@ u_cut = params['\nu_cut']
 pi = params['\npi']
 rho = params['rho']
 true_rho = params.get('true_rho', rho)
+transductive = params.get('transductive', rho)
 
 positive_classes = params['\npositive_classes']
 negative_classes = params.get('negative_classes', None)
@@ -266,15 +267,19 @@ valid_ratio = 0.2
 # Get tf datasets.
 max_dataset_size = 600000
 all_p_data_orig = lib_data.load_dataset(args.id_dataset, split="train", reindex_labels=True)
+all_p_data = all_p_data_orig.take(max_dataset_size).shuffle(max_dataset_size, seed=0)
+
 p_test_data = lib_data.load_dataset(args.id_dataset, split="test", reindex_labels=True)
 n_test_data = lib_data.load_dataset(args.ood_dataset, split="test", reindex_labels=True)
-all_u_data_orig = p_test_data.concatenate(n_test_data)
+if transductive:
+    all_u_data_orig = p_test_data.concatenate(n_test_data)
+else:
+    all_n_data_orig = lib_data.load_dataset(args.ood_dataset, split="train", reindex_labels=True)
+    all_n_data = all_n_data_orig.take(max_dataset_size).shuffle(max_dataset_size, seed=0)
+    all_p_data, unlabeled_p_data, num_unlabeled_p = split_train_valid(all_p_data, split_ratio=0.2)
+    all_u_data_orig = unlabeled_p_data.concatenate(all_n_data.take(num_unlabeled_p))
 
-all_u_data_orig = all_u_data_orig.take(max_dataset_size)
-all_p_data_orig = all_p_data_orig.take(max_dataset_size)
-
-all_p_data = all_p_data_orig.shuffle(max_dataset_size, seed=0)
-all_u_data = all_u_data_orig.shuffle(max_dataset_size, seed=0)
+all_u_data = all_u_data_orig.take(max_dataset_size).shuffle(max_dataset_size, seed=0)
 
 p_set, p_validation, pv_size = split_train_valid(all_p_data, split_ratio=valid_ratio)
 u_set, u_validation = all_u_data, all_u_data.shuffle(max_dataset_size, seed=0).take(pv_size)

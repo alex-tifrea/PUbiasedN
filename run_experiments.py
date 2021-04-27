@@ -56,35 +56,37 @@ Python program to run for each experiment. It must accept the following flags:
             for optimizer in ["sgd", "adam"]:
                 for start_lr in start_lr_values:
                     for nnpu_threshold in [-0.1, 0.01, 0., 0.01, 0.1]:
-                        cli_args = [
-                            ("experiment_name", curr_experiment_name),
-                            ("id_dataset", id_dataset),
-                            ("ood_dataset", ood_dataset),
-                            ("with_param", f"optimizer={optimizer}"),
-                            ("with_param", f"learning_rate_cls={start_lr}"),
-                            ("with_param", f"nn_threshold={nnpu_threshold}"),
-                        ]
-                        gin_args = []
+                        for transductive in [True, False]:
+                            cli_args = [
+                                ("experiment_name", curr_experiment_name),
+                                ("id_dataset", id_dataset),
+                                ("ood_dataset", ood_dataset),
+                                ("with_param", f"optimizer={optimizer}"),
+                                ("with_param", f"learning_rate_cls={start_lr}"),
+                                ("with_param", f"nn_threshold={nnpu_threshold}"),
+                                ("with_param", f"transductive={transductive}"),
+                            ]
+                            gin_args = []
 
-                        if args.local:
-                            lib_jobs.launch_local(args.py_to_run, cli_args, gin_args)
-                            continue
+                            if args.local:
+                                lib_jobs.launch_local(args.py_to_run, cli_args, gin_args)
+                                continue
 
-                        if "mnist" in id_dataset:
-                            nhours = 1
-                        elif "cifar10:" in id_dataset or "cifar100:" in id_dataset:
-                            nhours = 4
-                        elif "svhn" in id_dataset:
-                            nhours = 6
-                        else:
-                            nhours = 24
+                            if "mnist" in id_dataset:
+                                nhours = 1
+                            elif "cifar10:" in id_dataset or "cifar100:" in id_dataset:
+                                nhours = 4
+                            elif "svhn" in id_dataset:
+                                nhours = 6
+                            else:
+                                nhours = 24
 
-                        lib_jobs.launch_bsub(
-                            nhours,
-                            args.py_to_run,
-                            cli_args=cli_args,
-                            gin_args=gin_args,
-                        )
+                            lib_jobs.launch_bsub(
+                                nhours,
+                                args.py_to_run,
+                                cli_args=cli_args,
+                                gin_args=gin_args,
+                            )
 
 
 if __name__ == "__main__":

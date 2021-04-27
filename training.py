@@ -102,8 +102,8 @@ class Training(object):
         prefix = "best_" if is_final_model else ""
         lib_data.retry(lambda: mlflow.log_metrics({
             f"{prefix}test_acc": accuracy,
-            f"{prefix}test_p_acc": np.sum(np.logical_and(pred == 1, target == 1)) / np.sum(target == 1),
-            f"{prefix}test_n_acc": np.sum(np.logical_and(pred == 0, target == 0)) / np.sum(target == 0),
+            f"{prefix}test_tpr": np.sum(np.logical_and(pred == 1, target == 1)) / np.sum(target == 1),
+            f"{prefix}test_tnr": np.sum(np.logical_and(pred == 0, target == 0)) / np.sum(target == 0),
             f"{prefix}auroc": auc_score,
         }, step=epoch))
 
