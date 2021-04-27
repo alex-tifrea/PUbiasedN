@@ -8,7 +8,6 @@ import numpy as np
 import mlflow
 import torch
 import torch.utils.data
-import tensorflow as tf
 from tensorboardX import SummaryWriter
 
 from sklearn.svm import LinearSVC
@@ -20,6 +19,8 @@ from newsgroups.cbs import generate_cbs_features
 import torchvision.transforms as transforms
 from reproduction import lib_data
 
+import tensorflow as tf
+tf.config.set_visible_devices([], 'GPU')
 
 parser = argparse.ArgumentParser(description='Main File')
 

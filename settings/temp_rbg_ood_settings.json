@@ -1,0 +1,32 @@
+{
+    "rgb_datasets": [
+        [
+            "svhn_cropped:0,1,2,3,4",
+            "svhn_cropped:5,6,7,8,9"
+        ],
+        [
+            "cifar10",
+            "svhn_cropped"
+        ],
+        [
+            "cifar100",
+            "svhn_cropped"
+        ],
+        [
+            "svhn_cropped",
+            "cifar10"
+        ],
+        [
+            "svhn_cropped",
+            "cifar100"
+        ],
+        [
+            "cifar10:0,1,2,3,4",
+            "cifar10:5,6,7,8,9"
+        ],
+        [
+            "cifar10:0,1,2,3,4",
+            "cifar10:5,6,7,8,9"
+        ]
+    ]
+}

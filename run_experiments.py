@@ -49,27 +49,31 @@ Python program to run for each experiment. It must accept the following flags:
             # all the jobs want to create the same experiment.
             mlflow.set_experiment(curr_experiment_name)
 
-            cli_args = [
-                ("experiment_name", curr_experiment_name),
-                ("id_dataset", id_dataset),
-                ("ood_dataset", ood_dataset),
-            ]
-            gin_args = []
+            for start_lr in [0.001, 0.01, 0.1]:
+                for nnpu_threshold in [-0.1, 0.01, 0., 0.01, 0.1]:
+                    cli_args = [
+                        ("experiment_name", curr_experiment_name),
+                        ("id_dataset", id_dataset),
+                        ("ood_dataset", ood_dataset),
+                        ("with_param", f"learning_rate_cls={start_lr}"),
+                        ("with_param", f"nn_threshold={nnpu_threshold}"),
+                    ]
+                    gin_args = []
 
-            if args.local:
-                lib_jobs.launch_local(args.py_to_run, cli_args, gin_args)
-                return
+                    if args.local:
+                        lib_jobs.launch_local(args.py_to_run, cli_args, gin_args)
+                        continue
 
-            nhours = 4
-            if "imagenet" in id_dataset:
-                nhours = 24
+                    nhours = 4
+                    if "imagenet" in id_dataset:
+                        nhours = 24
 
-            lib_jobs.launch_bsub(
-                nhours,
-                args.py_to_run,
-                cli_args=cli_args,
-                gin_args=gin_args,
-            )
+                    lib_jobs.launch_bsub(
+                        nhours,
+                        args.py_to_run,
+                        cli_args=cli_args,
+                        gin_args=gin_args,
+                    )
 
 
 if __name__ == "__main__":
