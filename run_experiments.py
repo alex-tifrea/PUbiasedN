@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import subprocess
 import argparse
+import itertools
 import mlflow
 import os
 from utils import pretty_dataset_name
@@ -49,47 +50,53 @@ Python program to run for each experiment. It must accept the following flags:
             # all the jobs want to create the same experiment.
             mlflow.set_experiment(curr_experiment_name)
 
-            start_lr_values = {
-                "adam": [0.001, 0.01, 0.1],
-                "sgd": [0.01, 0.1]
-            }
-            for optimizer in ["sgd", "adam"]:
-                for start_lr in start_lr_values:
-                    for nnpu_threshold in [-0.1, 0.01, 0., 0.01, 0.1]:
-                        for transductive in [True, False]:
-                            cli_args = [
-                                ("experiment_name", curr_experiment_name),
-                                ("id_dataset", id_dataset),
-                                ("ood_dataset", ood_dataset),
-                                ("with_param", f"optimizer={optimizer}"),
-                                ("with_param", f"learning_rate_cls={start_lr}"),
-                                ("with_param", f"nn_threshold={nnpu_threshold}"),
-                                ("with_param", f"transductive={transductive}"),
-                            ]
-                            gin_args = []
+            for config in itertools.product(
+                [True], # use_sgd
+                [0.1],  # start_lr
+                [-0.01, 0., 0.01],  # nnpu_threshold
+                [True, False],  # transductive
+            ):
+                (
+                    use_sgd,
+                    start_lr,
+                    nnpu_threshold,
+                    transductive
+                ) = config
+                cli_args = [
+                    ("experiment_name", curr_experiment_name),
+                    ("id_dataset", id_dataset),
+                    ("ood_dataset", ood_dataset),
+                    ("with_param", f"use_sgd={use_sgd}"),
+                    ("with_param", f"learning_rate_cls={start_lr}"),
+                    ("with_param", f"nn_threshold={nnpu_threshold}"),
+                    ("with_param", f"transductive={transductive}"),
+                    ("goal_tag", "rerun"),
+                ]
+                gin_args = []
 
-                            if args.local:
-                                lib_jobs.launch_local(args.py_to_run, cli_args, gin_args)
-                                continue
+                if args.local:
+                    lib_jobs.launch_local(args.py_to_run, cli_args, gin_args)
+                    continue
 
-                        if "mnist" in id_dataset:
-                            nhours = 1
-                        elif "cifar10:" in id_dataset or "cifar100:" in id_dataset:
-                            nhours = 4
-                        elif "svhn_cropped:" in id_dataset:
-                            nhours = 4
-#                             nhours = 6
-                        elif "imagenet" in id_dataset:
-                            nhours = 24
-                        else:
-                            nhours = 6
+                if "mnist" in id_dataset:
+                    nhours = 1
+                elif "cifar10:" in id_dataset or "cifar100:" in id_dataset:
+                    nhours = 4
+                elif "svhn_cropped:" in id_dataset:
+                    nhours = 4
+#                   nhours = 6
+                elif "imagenet" in id_dataset:
+                    nhours = 24
+                else:
+                    nhours = 8
 
-                            lib_jobs.launch_bsub(
-                                nhours,
-                                args.py_to_run,
-                                cli_args=cli_args,
-                                gin_args=gin_args,
-                            )
+#                 print(nhours, args.py_to_run, cli_args)
+                lib_jobs.launch_bsub(
+                    nhours,
+                    args.py_to_run,
+                    cli_args=cli_args,
+                    gin_args=gin_args,
+                )
 
 
 if __name__ == "__main__":

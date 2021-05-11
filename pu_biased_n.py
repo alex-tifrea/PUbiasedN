@@ -38,6 +38,7 @@ parser.add_argument('--ppe-load-path', type=str, default=None)
 parser.add_argument("--id_dataset", required=True)
 parser.add_argument("--ood_dataset", required=True)
 parser.add_argument("--experiment_name", required=True)
+parser.add_argument("--goal_tag", type=str, default=None)
 parser.add_argument(
     "-wp",
     "--with_param",
@@ -319,6 +320,7 @@ mlflow_params = {
     "start_lr": learning_rate_cls,
     "nnpu_threshold": nn_threshold,
     "nnpu_stepsize": nn_rate,
+    "transductive": transductive,
 }
 
 print("MLFLOW params", mlflow_params)
@@ -393,6 +395,8 @@ if pu:
     run_id = run.info.run_id
     mlflow_params["run_id"] = run_id
     lib_data.retry(lambda: mlflow.log_params(mlflow_params))
+    if args.goal_tag is not None:
+        lib_data.retry(lambda: mlflow.set_tag("goal", args.goal_tag))
 
     print('')
     model = Net().cuda() if args.cuda else Net()

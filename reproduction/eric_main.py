@@ -9,6 +9,7 @@ def main():
     parser.add_argument("--experiment_name", type=str, required=True)
     parser.add_argument("--id_dataset", type=str, required=True)
     parser.add_argument("--ood_dataset", type=str, required=True)
+    parser.add_argument("--goal_tag", type=str)
     parser.add_argument(
         "-wp",
         "--with_param",
@@ -40,6 +41,8 @@ def main():
         args.ood_dataset,
         "--experiment_name",
         args.experiment_name,
+        "--goal_tag",
+        args.goal_tag,
         "--params-path",
         params_path,
     ]
