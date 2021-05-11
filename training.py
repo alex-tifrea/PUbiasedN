@@ -108,14 +108,15 @@ class Training(object):
             f"{prefix}orig_auroc": auc_score,
         }
 
-        # Then we add our own metrics.
+        # Then we add our own metrics. For the sake of consistency with the other OOD detection methods, we will label
+        # the training set as negative and the outliers as positives (so the opposite of how PU learning labels them).
         our_metrics = lib_data.get_eval_metrics(
-            id_y_true=target[target == 1],
-            id_y_pred=pred[target == 1],
-            id_test_statistic=output[target == 1],
-            ood_y_true=target[target == 0],
-            ood_y_pred=pred[target == 0],
-            ood_test_statistic=output[target == 0],
+            id_y_true=1 - target[target == 1],
+            id_y_pred=1 - pred[target == 1],
+            id_test_statistic=1 - output[target == 1],
+            ood_y_true=1 - target[target == 0],
+            ood_y_pred=1 - pred[target == 0],
+            ood_test_statistic=1 - output[target == 0],
         )
         if is_final_model:
             our_metrics = {f"heur_{k}": v for k, v in our_metrics.items()}
