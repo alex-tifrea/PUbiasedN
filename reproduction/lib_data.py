@@ -268,8 +268,8 @@ def empirical_cdf(x):
 
 
 def get_eval_metrics(
-    params,
-    train_statistic,
+    # params,
+    # train_statistic,
     id_y_true,
     id_y_pred,
     id_test_statistic,
@@ -333,25 +333,25 @@ def get_eval_metrics(
         "acc_at_tnr": acc_at_tnr,
     }
 
-    if compute_ocd:
-        # Use the method in https://arxiv.org/pdf/1808.00529.pdf to approximate
-        # the CDF of the outliers.
-        F_train = empirical_cdf(train_statistic)
-        test_statistic = np.concatenate((id_test_statistic, ood_test_statistic))
-        F_test = empirical_cdf(test_statistic)
-        alpha = params["target_ood_ratio"]
-        all_statistics = np.concatenate((train_statistic, test_statistic))
-        F_a_values = (
-            F_test(all_statistics) - (1 - alpha) * F_train(all_statistics)
-        ) / alpha
-        indexes = np.where(F_a_values <= (1 - tpr_level / 100))[0]
-        if indexes == []:
-            index = -1
-        else:
-            index = F_a_values[indexes].argmax()
-        threshold = all_statistics[index]
-        all_metrics["approx_tpr_ocd"] = (ood_test_statistic > threshold).mean()
-        all_metrics["fpr_at_tpr_ocd"] = (id_test_statistic > threshold).mean()
+    # if compute_ocd:
+    #     # Use the method in https://arxiv.org/pdf/1808.00529.pdf to approximate
+    #     # the CDF of the outliers.
+    #     F_train = empirical_cdf(train_statistic)
+    #     test_statistic = np.concatenate((id_test_statistic, ood_test_statistic))
+    #     F_test = empirical_cdf(test_statistic)
+    #     alpha = params["target_ood_ratio"]
+    #     all_statistics = np.concatenate((train_statistic, test_statistic))
+    #     F_a_values = (
+    #         F_test(all_statistics) - (1 - alpha) * F_train(all_statistics)
+    #     ) / alpha
+    #     indexes = np.where(F_a_values <= (1 - tpr_level / 100))[0]
+    #     if indexes == []:
+    #         index = -1
+    #     else:
+    #         index = F_a_values[indexes].argmax()
+    #     threshold = all_statistics[index]
+    #     all_metrics["approx_tpr_ocd"] = (ood_test_statistic > threshold).mean()
+    #     all_metrics["fpr_at_tpr_ocd"] = (id_test_statistic > threshold).mean()
 
     return all_metrics
 

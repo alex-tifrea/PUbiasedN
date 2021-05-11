@@ -99,13 +99,29 @@ class Training(object):
         n_negative = np.sum(target == 0)
         n_false_positive = np.sum(np.logical_and(pred == 1, target == 0))
 
-        prefix = "best_" if is_final_model else ""
-        lib_data.retry(lambda: mlflow.log_metrics({
-            f"{prefix}test_acc": accuracy,
-            f"{prefix}test_tpr": np.sum(np.logical_and(pred == 1, target == 1)) / np.sum(target == 1),
-            f"{prefix}test_tnr": np.sum(np.logical_and(pred == 0, target == 0)) / np.sum(target == 0),
-            f"{prefix}auroc": auc_score,
-        }, step=epoch))
+        prefix = "heur_" if is_final_model else ""
+        # First add the metrics as they were computed in the original code.
+        metrics = {
+            f"{prefix}orig_test_acc": accuracy,
+            f"{prefix}orig_test_tpr": np.sum(np.logical_and(pred == 1, target == 1)) / np.sum(target == 1),
+            f"{prefix}orig_test_tnr": np.sum(np.logical_and(pred == 0, target == 0)) / np.sum(target == 0),
+            f"{prefix}orig_auroc": auc_score,
+        }
+
+        # Then we add our own metrics.
+        our_metrics = lib_data.get_eval_metrics(
+            id_y_true=target[target == 1],
+            id_y_pred=pred[target == 1],
+            id_test_statistic=output[target == 1],
+            ood_y_true=target[target == 0],
+            ood_y_pred=pred[target == 0],
+            ood_test_statistic=output[target == 0],
+        )
+        if is_final_model:
+            our_metrics = {f"heur_{k}": v for k, v in our_metrics.items()}
+        metrics.update(our_metrics)
+
+        lib_data.retry(lambda: mlflow.log_metrics(metrics, step=epoch))
 
         if to_print:
             print('Test set: Accuracy: {:.2f}%'
